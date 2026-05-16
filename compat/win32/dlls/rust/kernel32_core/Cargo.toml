@@ -1,0 +1,11 @@
+[package]
+name = "kernel32-core"
+version = "2026.4.0"
+edition = "2021"
+description = "OZKAN-OS Win32 kernel32.dll implementation (clean-room Rust port)"
+
+[lib]
+name = "kernel32_core"
+path = "kernel32_root.rs"
+
+[dependencies]

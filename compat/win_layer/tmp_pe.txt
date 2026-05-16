@@ -1,0 +1,892 @@
+const IMAGE_DOS_SIGNATURE: u16 = 0x5A4D;
+const IMAGE_NT_SIGNATURE: u32 = 0x00004550;
+const IMAGE_FILE_MACHINE_I386: u16 = 0x014C;
+const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
+const IMAGE_FILE_MACHINE_ARMNT: u16 = 0x01C4;
+const IMAGE_FILE_MACHINE_ARM64: u16 = 0xAA64;
+const IMAGE_FILE_MACHINE_RISCV32: u16 = 0x5032;
+const IMAGE_FILE_MACHINE_RISCV64: u16 = 0x5064;
+const IMAGE_REL_BASED_HIGHLOW: u16 = 3;
+const IMAGE_REL_BASED_DIR64: u16 = 10;
+pub struct ImageDosHeader {
+    pub e_magic: u16, pub e_cblp: u16, pub e_cp: u16, pub e_crlc: u16,
+    pub e_cparhdr: u16, pub e_minalloc: u16, pub e_maxalloc: u16,
+    pub e_ss: u16, pub e_sp: u16, pub e_csum: u16, pub e_ip: u16,
+    pub e_cs: u16, pub e_lfarlc: u16, pub e_ovno: u16,
+    pub e_res: [u16; 4], pub e_oemid: u16, pub e_oeminfo: u16,
+    pub e_res2: [u16; 10], pub e_lfanew: i32,
+}
+
+impl Default for ImageDosHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageDosHeader {
+    pub const fn new() -> Self {
+        Self { e_magic: 0, e_cblp: 0, e_cp: 0, e_crlc: 0, e_cparhdr: 0, e_minalloc: 0, e_maxalloc: 0, e_ss: 0, e_sp: 0, e_csum: 0, e_ip: 0, e_cs: 0, e_lfarlc: 0, e_ovno: 0, e_res: [0; 4], e_oemid: 0, e_oeminfo: 0, e_res2: [0; 10], e_lfanew: 0 }
+    }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 64 { return None; }
+        let magic = u16::from_le_bytes([data[0], data[1]]);
+        if magic != IMAGE_DOS_SIGNATURE { return None; }
+        let lfanew = i32::from_le_bytes([data[60], data[61], data[62], data[63]]);
+        Some(Self {
+            e_magic: magic, e_cblp: u16::from_le_bytes([data[2], data[3]]),
+            e_cp: u16::from_le_bytes([data[4], data[5]]), e_crlc: u16::from_le_bytes([data[6], data[7]]),
+            e_cparhdr: u16::from_le_bytes([data[8], data[9]]), e_minalloc: u16::from_le_bytes([data[10], data[11]]),
+            e_maxalloc: u16::from_le_bytes([data[12], data[13]]), e_ss: u16::from_le_bytes([data[14], data[15]]),
+            e_sp: u16::from_le_bytes([data[16], data[17]]), e_csum: u16::from_le_bytes([data[18], data[19]]),
+            e_ip: u16::from_le_bytes([data[20], data[21]]), e_cs: u16::from_le_bytes([data[22], data[23]]),
+            e_lfarlc: u16::from_le_bytes([data[24], data[25]]), e_ovno: u16::from_le_bytes([data[26], data[27]]),
+            e_res: [u16::from_le_bytes([data[28], data[29]]), u16::from_le_bytes([data[30], data[31]]), u16::from_le_bytes([data[32], data[33]]), u16::from_le_bytes([data[34], data[35]])],
+            e_oemid: u16::from_le_bytes([data[36], data[37]]), e_oeminfo: u16::from_le_bytes([data[38], data[39]]),
+            e_res2: [u16::from_le_bytes([data[40], data[41]]), u16::from_le_bytes([data[42], data[43]]), u16::from_le_bytes([data[44], data[45]]), u16::from_le_bytes([data[46], data[47]]), u16::from_le_bytes([data[48], data[49]]), u16::from_le_bytes([data[50], data[51]]), u16::from_le_bytes([data[52], data[53]]), u16::from_le_bytes([data[54], data[55]]), u16::from_le_bytes([data[56], data[57]]), u16::from_le_bytes([data[58], data[59]])],
+            e_lfanew: lfanew,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageFileHeader {
+    pub machine: u16, pub number_of_sections: u16, pub time_date_stamp: u32,
+    pub pointer_to_symbol_table: u32, pub number_of_symbols: u32,
+    pub size_of_optional_header: u16, pub characteristics: u16,
+}
+
+impl Default for ImageFileHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageFileHeader {
+    pub const fn new() -> Self { Self { machine: 0, number_of_sections: 0, time_date_stamp: 0, pointer_to_symbol_table: 0, number_of_symbols: 0, size_of_optional_header: 0, characteristics: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 20 { return None; }
+        Some(Self {
+            machine: u16::from_le_bytes([data[0], data[1]]), number_of_sections: u16::from_le_bytes([data[2], data[3]]),
+            time_date_stamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]),
+            pointer_to_symbol_table: u32::from_le_bytes([data[8], data[9], data[10], data[11]]),
+            number_of_symbols: u32::from_le_bytes([data[12], data[13], data[14], data[15]]),
+            size_of_optional_header: u16::from_le_bytes([data[16], data[17]]),
+            characteristics: u16::from_le_bytes([data[18], data[19]]),
+        })
+    }
+    pub fn machine_name(&self) -> &'static str {
+        match self.machine {
+            IMAGE_FILE_MACHINE_I386 => "i386", IMAGE_FILE_MACHINE_AMD64 => "x86_64",
+            IMAGE_FILE_MACHINE_ARMNT => "ARM Thumb", IMAGE_FILE_MACHINE_ARM64 => "ARM64",
+            IMAGE_FILE_MACHINE_RISCV32 => "RISC-V 32", IMAGE_FILE_MACHINE_RISCV64 => "RISC-V 64",
+            _ => "Unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageDataDirectory { pub virtual_address: u32, pub size: u32 }
+impl Default for ImageDataDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageDataDirectory {
+    pub const fn new() -> Self { Self { virtual_address: 0, size: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 8 { return None; }
+        Some(Self { virtual_address: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), size: u32::from_le_bytes([data[4], data[5], data[6], data[7]]) })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageOptionalHeader {
+    pub magic: u16, pub major_linker_version: u8, pub minor_linker_version: u8,
+    pub size_of_code: u32, pub size_of_initialized_data: u32, pub size_of_uninitialized_data: u32,
+    pub address_of_entry_point: u32, pub base_of_code: u32, pub image_base: u64,
+    pub section_alignment: u32, pub file_alignment: u32,
+    pub major_operating_system_version: u16, pub minor_operating_system_version: u16,
+    pub major_image_version: u16, pub minor_image_version: u16,
+    pub major_subsystem_version: u16, pub minor_subsystem_version: u16,
+    pub win32_version_value: u32, pub size_of_image: u32, pub size_of_headers: u32,
+    pub check_sum: u32, pub subsystem: u16, pub dll_characteristics: u16,
+    pub size_of_stack_reserve: u64, pub size_of_stack_commit: u64,
+    pub size_of_heap_reserve: u64, pub size_of_heap_commit: u64,
+    pub loader_flags: u32, pub number_of_rva_and_sizes: u32,
+    pub data_directory: [ImageDataDirectory; 16],
+}
+
+impl Default for ImageOptionalHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageOptionalHeader {
+    pub fn new() -> Self {
+        Self { magic: 0, major_linker_version: 0, minor_linker_version: 0, size_of_code: 0, size_of_initialized_data: 0, size_of_uninitialized_data: 0, address_of_entry_point: 0, base_of_code: 0, image_base: 0, section_alignment: 0, file_alignment: 0, major_operating_system_version: 0, minor_operating_system_version: 0, major_image_version: 0, minor_image_version: 0, major_subsystem_version: 0, minor_subsystem_version: 0, win32_version_value: 0, size_of_image: 0, size_of_headers: 0, check_sum: 0, subsystem: 0, dll_characteristics: 0, size_of_stack_reserve: 0, size_of_stack_commit: 0, size_of_heap_reserve: 0, size_of_heap_commit: 0, loader_flags: 0, number_of_rva_and_sizes: 0, data_directory: [ImageDataDirectory::new(); 16] }
+    }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 2 { return None; }
+        let magic = u16::from_le_bytes([data[0], data[1]]);
+        let is_64 = magic == 0x20B;
+        let mut off = 2;
+        if data.len() < off + 22 { return None; }
+        let major_linker_version = data[off];
+        let minor_linker_version = data[off + 1];
+        let size_of_code = u32::from_le_bytes([data[off+2], data[off+3], data[off+4], data[off+5]]);
+        let size_of_initialized_data = u32::from_le_bytes([data[off+6], data[off+7], data[off+8], data[off+9]]);
+        let size_of_uninitialized_data = u32::from_le_bytes([data[off+10], data[off+11], data[off+12], data[off+13]]);
+        let address_of_entry_point = u32::from_le_bytes([data[off+14], data[off+15], data[off+16], data[off+17]]);
+        let base_of_code = u32::from_le_bytes([data[off+18], data[off+19], data[off+20], data[off+21]]);
+        off += 22;
+        let image_base = if is_64 { if data.len() < off + 8 { return None; } let v = u64::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3], data[off+4], data[off+5], data[off+6], data[off+7]]); off += 8; v } else { if data.len() < off + 4 { return None; } let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]) as u64; off += 4; v };
+        if data.len() < off + 28 { return None; }
+        let section_alignment = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
+        let file_alignment = u32::from_le_bytes([data[off+4], data[off+5], data[off+6], data[off+7]]);
+        let major_os = u16::from_le_bytes([data[off+8], data[off+9]]);
+        let minor_os = u16::from_le_bytes([data[off+10], data[off+11]]);
+        let major_img = u16::from_le_bytes([data[off+12], data[off+13]]);
+        let minor_img = u16::from_le_bytes([data[off+14], data[off+15]]);
+        let major_sub = u16::from_le_bytes([data[off+16], data[off+17]]);
+        let minor_sub = u16::from_le_bytes([data[off+18], data[off+19]]);
+        let win32_version = u32::from_le_bytes([data[off+20], data[off+21], data[off+22], data[off+23]]);
+        let size_of_image = u32::from_le_bytes([data[off+24], data[off+25], data[off+26], data[off+27]]);
+        off += 28;
+        if data.len() < off + 16 { return None; }
+        let size_of_headers = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
+        let check_sum = u32::from_le_bytes([data[off+4], data[off+5], data[off+6], data[off+7]]);
+        let subsystem = u16::from_le_bytes([data[off+8], data[off+9]]);
+        let dll_characteristics = u16::from_le_bytes([data[off+10], data[off+11]]);
+        off += 12;
+        let size_of_stack_reserve = if is_64 { if data.len() < off + 8 { return None; } let v = u64::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3], data[off+4], data[off+5], data[off+6], data[off+7]]); off += 8; v } else { if data.len() < off + 4 { return None; } let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]) as u64; off += 4; v };
+        let size_of_stack_commit = if is_64 { if data.len() < off + 8 { return None; } let v = u64::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3], data[off+4], data[off+5], data[off+6], data[off+7]]); off += 8; v } else { if data.len() < off + 4 { return None; } let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]) as u64; off += 4; v };
+        let size_of_heap_reserve = if is_64 { if data.len() < off + 8 { return None; } let v = u64::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3], data[off+4], data[off+5], data[off+6], data[off+7]]); off += 8; v } else { if data.len() < off + 4 { return None; } let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]) as u64; off += 4; v };
+        let size_of_heap_commit = if is_64 { if data.len() < off + 8 { return None; } let v = u64::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3], data[off+4], data[off+5], data[off+6], data[off+7]]); off += 8; v } else { if data.len() < off + 4 { return None; } let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]) as u64; off += 4; v };
+        if data.len() < off + 8 { return None; }
+        let loader_flags = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
+        let number_of_rva = u32::from_le_bytes([data[off+4], data[off+5], data[off+6], data[off+7]]);
+        off += 8;
+        let mut data_directory = [ImageDataDirectory::new(); 16];
+        for i in 0..16usize {
+            if data.len() < off + 8 { break; }
+            data_directory[i] = ImageDataDirectory::parse(&data[off..off+8]).unwrap_or(ImageDataDirectory::new());
+            off += 8;
+        }
+        Some(Self { magic, major_linker_version, minor_linker_version, size_of_code, size_of_initialized_data, size_of_uninitialized_data, address_of_entry_point, base_of_code, image_base, section_alignment, file_alignment, major_operating_system_version: major_os, minor_operating_system_version: minor_os, major_image_version: major_img, minor_image_version: minor_img, major_subsystem_version: major_sub, minor_subsystem_version: minor_sub, win32_version_value: win32_version, size_of_image, size_of_headers, check_sum, subsystem, dll_characteristics, size_of_stack_reserve, size_of_stack_commit, size_of_heap_reserve, size_of_heap_commit, loader_flags, number_of_rva_and_sizes: number_of_rva, data_directory })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageSectionHeader {
+    pub name: [u8; 8], pub virtual_size: u32, pub virtual_address: u32,
+    pub size_of_raw_data: u32, pub pointer_to_raw_data: u32,
+    pub pointer_to_relocations: u32, pub pointer_to_linenumbers: u32,
+    pub number_of_relocations: u16, pub number_of_linenumbers: u16,
+    pub characteristics: u32,
+}
+
+impl Default for ImageSectionHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageSectionHeader {
+    pub const fn new() -> Self { Self { name: [0; 8], virtual_size: 0, virtual_address: 0, size_of_raw_data: 0, pointer_to_raw_data: 0, pointer_to_relocations: 0, pointer_to_linenumbers: 0, number_of_relocations: 0, number_of_linenumbers: 0, characteristics: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 40 { return None; }
+        let mut name = [0u8; 8];
+        name.copy_from_slice(&data[0..8]);
+        Some(Self { name, virtual_size: u32::from_le_bytes([data[8], data[9], data[10], data[11]]), virtual_address: u32::from_le_bytes([data[12], data[13], data[14], data[15]]), size_of_raw_data: u32::from_le_bytes([data[16], data[17], data[18], data[19]]), pointer_to_raw_data: u32::from_le_bytes([data[20], data[21], data[22], data[23]]), pointer_to_relocations: u32::from_le_bytes([data[24], data[25], data[26], data[27]]), pointer_to_linenumbers: u32::from_le_bytes([data[28], data[29], data[30], data[31]]), number_of_relocations: u16::from_le_bytes([data[32], data[33]]), number_of_linenumbers: u16::from_le_bytes([data[34], data[35]]), characteristics: u32::from_le_bytes([data[36], data[37], data[38], data[39]]) })
+    }
+    pub fn name_as_str(&self) -> &str { let len = self.name.iter().position(|&b| b == 0).unwrap_or(8); core::str::from_utf8(&self.name[..len]).unwrap_or("?") }
+    pub fn is_executable(&self) -> bool { (self.characteristics & 0x2000_0000) != 0 }
+    pub fn is_readable(&self) -> bool { (self.characteristics & 0x4000_0000) != 0 }
+    pub fn is_writable(&self) -> bool { (self.characteristics & 0x8000_0000) != 0 }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageImportDescriptor {
+    pub original_first_thunk: u32, pub time_date_stamp: u32,
+    pub forwarder_chain: u32, pub name_rva: u32, pub first_thunk: u32,
+}
+
+impl Default for ImageImportDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageImportDescriptor {
+    pub const fn new() -> Self { Self { original_first_thunk: 0, time_date_stamp: 0, forwarder_chain: 0, name_rva: 0, first_thunk: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 20 { return None; }
+        Some(Self { original_first_thunk: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), time_date_stamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), forwarder_chain: u32::from_le_bytes([data[8], data[9], data[10], data[11]]), name_rva: u32::from_le_bytes([data[12], data[13], data[14], data[15]]), first_thunk: u32::from_le_bytes([data[16], data[17], data[18], data[19]]) })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageExportDirectory {
+    pub characteristics: u32, pub time_date_stamp: u32, pub major_version: u16, pub minor_version: u16,
+    pub name_rva: u32, pub ordinal_base: u32, pub number_of_functions: u32, pub number_of_names: u32,
+    pub address_of_functions: u32, pub address_of_names: u32, pub address_of_name_ordinals: u32,
+}
+
+impl Default for ImageExportDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageExportDirectory {
+    pub const fn new() -> Self { Self { characteristics: 0, time_date_stamp: 0, major_version: 0, minor_version: 0, name_rva: 0, ordinal_base: 0, number_of_functions: 0, number_of_names: 0, address_of_functions: 0, address_of_names: 0, address_of_name_ordinals: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 40 { return None; }
+        Some(Self { characteristics: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), time_date_stamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), major_version: u16::from_le_bytes([data[8], data[9]]), minor_version: u16::from_le_bytes([data[10], data[11]]), name_rva: u32::from_le_bytes([data[12], data[13], data[14], data[15]]), ordinal_base: u32::from_le_bytes([data[16], data[17], data[18], data[19]]), number_of_functions: u32::from_le_bytes([data[20], data[21], data[22], data[23]]), number_of_names: u32::from_le_bytes([data[24], data[25], data[26], data[27]]), address_of_functions: u32::from_le_bytes([data[28], data[29], data[30], data[31]]), address_of_names: u32::from_le_bytes([data[32], data[33], data[34], data[35]]), address_of_name_ordinals: u32::from_le_bytes([data[36], data[37], data[38], data[39]]) })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ImageBaseRelocation {
+    pub virtual_address: u32, pub size_of_block: u32, pub type_offsets: Vec<u16>,
+}
+
+impl ImageBaseRelocation {
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 8 { return None; }
+        let virtual_address = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+        let size_of_block = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+        let num_entries = (size_of_block as usize - 8) / 2;
+        let mut type_offsets = Vec::new();
+        for i in 0..num_entries {
+            let off = 8 + i * 2;
+            if data.len() < off + 2 { break; }
+            type_offsets.push(u16::from_le_bytes([data[off], data[off+1]]));
+        }
+        Some(Self { virtual_address, size_of_block, type_offsets })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PeImport { pub dll_name: String, pub func_name: String, pub ordinal: u16, pub hint: u16 }
+
+#[derive(Debug, Clone)]
+pub struct PeExport { pub name: String, pub ordinal: u32, pub rva: u32 }
+
+#[derive(Debug, Clone)]
+pub struct PeParserResult {
+    pub dos_header: ImageDosHeader, pub coff_header: ImageFileHeader, pub optional_header: ImageOptionalHeader,
+    pub sections: Vec<ImageSectionHeader>, pub imports: Vec<PeImport>, pub exports: Vec<PeExport>,
+    pub relocs: Vec<ImageBaseRelocation>, pub is_valid: bool, pub errors: Vec<String>,
+}
+
+impl Default for PeParserResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PeParserResult {
+    pub fn new() -> Self { Self { dos_header: ImageDosHeader::new(), coff_header: ImageFileHeader::new(), optional_header: ImageOptionalHeader::new(), sections: Vec::new(), imports: Vec::new(), exports: Vec::new(), relocs: Vec::new(), is_valid: false, errors: Vec::new() } }
+}
+
+pub struct PeParser;
+
+impl PeParser {
+    pub fn parse(data: &[u8]) -> PeParserResult {
+        let mut result = PeParserResult::new();
+        if data.len() < 64 { result.errors.push(String::from("PE: Data too small for DOS header")); return result; }
+        let dos = match ImageDosHeader::parse(data) { Some(d) => d, None => { result.errors.push(String::from("PE: Invalid DOS header")); return result; } };
+        result.dos_header = dos;
+        let pe_offset = dos.e_lfanew as usize;
+        if data.len() < pe_offset + 4 { result.errors.push(String::from("PE: Invalid PE offset")); return result; }
+        let pe_sig = u32::from_le_bytes([data[pe_offset], data[pe_offset+1], data[pe_offset+2], data[pe_offset+3]]);
+        if pe_sig != IMAGE_NT_SIGNATURE { result.errors.push(format!("PE: Invalid PE signature: 0x{:08X}", pe_sig)); return result; }
+        let coff_offset = pe_offset + 4;
+        let coff = match ImageFileHeader::parse(&data[coff_offset..]) { Some(c) => c, None => { result.errors.push(String::from("PE: Invalid COFF header")); return result; } };
+        result.coff_header = coff;
+        let opt_offset = coff_offset + 20;
+        let opt = match ImageOptionalHeader::parse(&data[opt_offset..]) { Some(o) => o, None => { result.errors.push(String::from("PE: Invalid Optional header")); return result; } };
+        result.optional_header = opt;
+        let sec_offset = opt_offset + if opt.magic == 0x20B { 240 } else { 224 };
+        for i in 0..coff.number_of_sections as usize {
+            let off = sec_offset + i * 40;
+            if data.len() < off + 40 { break; }
+            if let Some(sec) = ImageSectionHeader::parse(&data[off..]) { result.sections.push(sec); }
+        }
+        let import_dir = opt.data_directory[1];
+        if import_dir.virtual_address != 0 && import_dir.size != 0 { Self::parse_imports(data, &result.sections, import_dir.virtual_address, import_dir.size, &mut result.imports); }
+        let export_dir = opt.data_directory[0];
+        if export_dir.virtual_address != 0 && export_dir.size != 0 { Self::parse_exports(data, &result.sections, export_dir.virtual_address, &mut result.exports); }
+        let reloc_dir = opt.data_directory[5];
+        if reloc_dir.virtual_address != 0 && reloc_dir.size != 0 { Self::parse_relocations(data, &result.sections, reloc_dir.virtual_address, reloc_dir.size, &mut result.relocs); }
+        result.is_valid = true; result
+    }
+    fn rva_to_offset(sections: &[ImageSectionHeader], rva: u32) -> Option<usize> {
+        for sec in sections { if rva >= sec.virtual_address && rva < sec.virtual_address + sec.virtual_size { return Some((rva - sec.virtual_address + sec.pointer_to_raw_data) as usize); } }
+        None
+    }
+    fn parse_imports(data: &[u8], sections: &[ImageSectionHeader], rva: u32, _size: u32, out: &mut Vec<PeImport>) {
+        let mut offset = match Self::rva_to_offset(sections, rva) { Some(o) => o, None => return };
+        loop {
+            if data.len() < offset + 20 { break; }
+            let desc = match ImageImportDescriptor::parse(&data[offset..]) { Some(d) => d, None => break };
+            if desc.original_first_thunk == 0 && desc.first_thunk == 0 { break; }
+            let name_off = match Self::rva_to_offset(sections, desc.name_rva) { Some(o) => o, None => { offset += 20; continue; } };
+            let dll_name = Self::read_ascii(data, name_off);
+            let thunk_rva = if desc.original_first_thunk != 0 { desc.original_first_thunk } else { desc.first_thunk };
+            let mut thunk_off = match Self::rva_to_offset(sections, thunk_rva) { Some(o) => o, None => { offset += 20; continue; } };
+            loop {
+                if data.len() < thunk_off + 8 { break; }
+                let thunk = u64::from_le_bytes([data[thunk_off], data[thunk_off+1], data[thunk_off+2], data[thunk_off+3], data[thunk_off+4], data[thunk_off+5], data[thunk_off+6], data[thunk_off+7]]);
+                if thunk == 0 { break; }
+                if (thunk & 0x8000_0000_0000_0000) == 0 {
+                    let hint_off = match Self::rva_to_offset(sections, (thunk & 0xFFFFFFFF) as u32) { Some(o) => o, None => { thunk_off += 8; continue; } };
+                    if data.len() >= hint_off + 2 { let hint = u16::from_le_bytes([data[hint_off], data[hint_off+1]]); let func_name = Self::read_ascii(data, hint_off + 2); out.push(PeImport { dll_name: String::from(&dll_name), func_name, ordinal: 0, hint }); }
+                } else { let ordinal = (thunk & 0xFFFF) as u16; out.push(PeImport { dll_name: String::from(&dll_name), func_name: String::from(""), ordinal, hint: 0 }); }
+                thunk_off += 8;
+            }
+            offset += 20;
+        }
+    }
+    fn parse_exports(data: &[u8], sections: &[ImageSectionHeader], rva: u32, out: &mut Vec<PeExport>) {
+        let offset = match Self::rva_to_offset(sections, rva) { Some(o) => o, None => return };
+        if data.len() < offset + 40 { return; }
+        let export_dir = match ImageExportDirectory::parse(&data[offset..]) { Some(d) => d, None => return };
+        let names_off = match Self::rva_to_offset(sections, export_dir.address_of_names) { Some(o) => o, None => return };
+        let ordinals_off = match Self::rva_to_offset(sections, export_dir.address_of_name_ordinals) { Some(o) => o, None => return };
+        let funcs_off = match Self::rva_to_offset(sections, export_dir.address_of_functions) { Some(o) => o, None => return };
+        for i in 0..export_dir.number_of_names as usize {
+            if data.len() < names_off + i * 4 + 4 { break; }
+            let name_rva = u32::from_le_bytes([data[names_off + i*4], data[names_off + i*4 + 1], data[names_off + i*4 + 2], data[names_off + i*4 + 3]]);
+            let name_off = match Self::rva_to_offset(sections, name_rva) { Some(o) => o, None => continue };
+            let name = Self::read_ascii(data, name_off);
+            if data.len() < ordinals_off + i * 2 + 2 { continue; }
+            let ordinal = u16::from_le_bytes([data[ordinals_off + i*2], data[ordinals_off + i*2 + 1]]) as u32;
+            let func_idx = (ordinal - export_dir.ordinal_base) as usize;
+            if data.len() < funcs_off + func_idx * 4 + 4 { continue; }
+            let func_rva = u32::from_le_bytes([data[funcs_off + func_idx*4], data[funcs_off + func_idx*4 + 1], data[funcs_off + func_idx*4 + 2], data[funcs_off + func_idx*4 + 3]]);
+            out.push(PeExport { name, ordinal: ordinal + 1, rva: func_rva });
+        }
+    }
+    fn parse_relocations(data: &[u8], sections: &[ImageSectionHeader], rva: u32, size: u32, out: &mut Vec<ImageBaseRelocation>) {
+        let offset = match Self::rva_to_offset(sections, rva) { Some(o) => o, None => return };
+        let mut cur = offset; let end = offset + size as usize;
+        while cur + 8 <= end && cur + 8 <= data.len() { if let Some(rel) = ImageBaseRelocation::parse(&data[cur..]) { if rel.size_of_block == 0 { break; } cur += rel.size_of_block as usize; out.push(rel); } else { break; } }
+    }
+    fn read_ascii(data: &[u8], offset: usize) -> String {
+        let mut s = String::new();
+        for i in offset..data.len() { if data[i] == 0 { break; } if data[i].is_ascii() { s.push(data[i] as char); } }
+        s
+    }
+}
+
+// ─── Registry Hive Parser ──────────────────────────────────────
+
+// ─── Process / Thread Manager ──────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct WinThread {
+    pub tid: u32, pub pid: u32, pub state: ThreadState, pub priority: i32,
+    pub entry_point: u64, pub stack_base: u64, pub stack_limit: u64,
+    pub context_eax: u32, pub context_ebx: u32, pub context_ecx: u32,
+    pub context_edx: u32, pub context_esi: u32, pub context_edi: u32,
+    pub context_ebp: u32, pub context_esp: u32, pub context_eip: u32,
+    pub context_eflags: u32, pub exit_code: i32,
+}
+
+impl WinThread {
+    pub fn new(tid: u32, pid: u32, entry: u64) -> Self {
+        Self { tid, pid, state: ThreadState::Initialized, priority: 8, entry_point: entry, stack_base: 0, stack_limit: 0, context_eax: 0, context_ebx: 0, context_ecx: 0, context_edx: 0, context_esi: 0, context_edi: 0, context_ebp: 0, context_esp: 0, context_eip: entry as u32, context_eflags: 0x202, exit_code: 0 }
+    }
+    pub fn set_context(&mut self, eax: u32, ebx: u32, ecx: u32, edx: u32) { self.context_eax = eax; self.context_ebx = ebx; self.context_ecx = ecx; self.context_edx = edx; }
+    pub fn suspend(&mut self) { if self.state == ThreadState::Running { self.state = ThreadState::Waiting; } }
+    pub fn resume(&mut self) { if self.state == ThreadState::Waiting { self.state = ThreadState::Ready; } }
+}
+
+#[derive(Debug, Clone)]
+pub struct WinHandle { pub handle: u64, pub handle_type: HandleType, pub value: u64, pub access: u32 }
+
+#[derive(Debug, Clone)]
+pub struct WinProcess {
+    pub pid: u32, pub parent_pid: u32, pub name: String, pub image_path: String,
+    pub cmd_line: String, pub threads: Vec<WinThread>, pub handles: Vec<WinHandle>,
+    pub base_address: u64, pub image_size: u64, pub peb_address: u64, pub exit_code: u32,
+}
+
+impl WinProcess {
+    pub fn new(pid: u32, name: &str) -> Self { Self { pid, parent_pid: 0, name: String::from(name), image_path: String::from(""), cmd_line: String::from(""), threads: Vec::new(), handles: Vec::new(), base_address: 0x400000, image_size: 0, peb_address: 0, exit_code: 0x103 } }
+    pub fn create_thread(&mut self, entry: u64) -> u32 { let tid = self.threads.len() as u32 + 1; self.threads.push(WinThread::new(tid, self.pid, entry)); tid }
+    pub fn terminate_thread(&mut self, tid: u32) -> bool { if let Some(t) = self.threads.iter_mut().find(|t| t.tid == tid) { t.state = ThreadState::Terminated; true } else { false } }
+    pub fn allocate_handle(&mut self, handle_type: HandleType, value: u64) -> u64 { let handle = 0x1000 + self.handles.len() as u64; self.handles.push(WinHandle { handle, handle_type, value, access: 0x1F0FFF }); handle }
+    pub fn close_handle(&mut self, handle: u64) -> bool { if let Some(idx) = self.handles.iter().position(|h| h.handle == handle) { self.handles.remove(idx); true } else { false } }
+}
+
+
+// ─── High-Level Registry ───────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct RegistryKey {
+    pub name: String, pub values: BTreeMap<String, RegistryValue>, pub subkeys: Vec<String>,
+}
+
+impl RegistryKey {
+    pub fn new(name: &str) -> Self { Self { name: String::from(name), values: BTreeMap::new(), subkeys: Vec::new() } }
+    pub fn set_value(&mut self, value_name: &str, value: RegistryValue) { self.values.insert(String::from(value_name), value); }
+    pub fn get_value(&self, value_name: &str) -> Option<&RegistryValue> { self.values.get(value_name) }
+    pub fn add_subkey(&mut self, name: &str) { self.subkeys.push(String::from(name)); }
+}
+
+// ─── Win32 Application Manager ─────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct WinAppDyn {
+    pub name: String, pub running: bool, pub security: i32, pub pe_info: Option<PeParserResult>,
+}
+
+impl WinAppDyn {
+    pub fn new(name: &str, running: bool, security: i32) -> Self { Self { name: String::from(name), running, security, pe_info: None } }
+    pub fn status_label(&self) -> &'static str {
+        if self.running { Lang::get(MsgId::CompatWin32Running) } else { Lang::get(MsgId::CompatWin32Stopped) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Win32FileHandle {
+    pub name: String, pub data: Vec<u8>, pub pos: usize, pub access: u32, pub share: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct Win32Module {
+    pub name: String, pub base: u64, pub image: MappedImage, pub exports: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Win32Event {
+    pub signaled: bool, pub manual_reset: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Win32Mutex {
+    pub owned: bool, pub thread_id: u32,
+pub struct ImageResourceDirectory {
+    pub characteristics: u32, pub time_date_stamp: u32, pub major_version: u16,
+    pub minor_version: u16, pub number_of_named_entries: u16, pub number_of_id_entries: u16,
+}
+
+impl Default for ImageResourceDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageResourceDirectory {
+    pub const fn new() -> Self { Self { characteristics: 0, time_date_stamp: 0, major_version: 0, minor_version: 0, number_of_named_entries: 0, number_of_id_entries: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 16 { return None; }
+        Some(Self { characteristics: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), time_date_stamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), major_version: u16::from_le_bytes([data[8], data[9]]), minor_version: u16::from_le_bytes([data[10], data[11]]), number_of_named_entries: u16::from_le_bytes([data[12], data[13]]), number_of_id_entries: u16::from_le_bytes([data[14], data[15]]) })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageResourceDirectoryEntry {
+    pub name_offset: u32, pub id: u32, pub offset_to_data: u32,
+    pub data_is_directory: bool, pub data_rva: u32,
+}
+
+impl Default for ImageResourceDirectoryEntry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageResourceDirectoryEntry {
+    pub const fn new() -> Self { Self { name_offset: 0, id: 0, offset_to_data: 0, data_is_directory: false, data_rva: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 8 { return None; }
+        let name_offset = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+        let offset_to_data = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+        let data_is_directory = (offset_to_data & 0x80000000) != 0;
+        let data_rva = offset_to_data & 0x7FFFFFFF;
+        Some(Self { name_offset, id: name_offset & 0xFFFF, offset_to_data, data_is_directory, data_rva })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageResourceDataEntry {
+    pub offset_to_data: u32, pub size: u32, pub code_page: u32, pub reserved: u32,
+}
+
+impl Default for ImageResourceDataEntry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageResourceDataEntry {
+    pub const fn new() -> Self { Self { offset_to_data: 0, size: 0, code_page: 0, reserved: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 16 { return None; }
+        Some(Self { offset_to_data: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), size: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), code_page: u32::from_le_bytes([data[8], data[9], data[10], data[11]]), reserved: u32::from_le_bytes([data[12], data[13], data[14], data[15]]) })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PeResource {
+    pub type_id: u32, pub name_id: u32, pub lang_id: u32,
+    pub data_rva: u32, pub size: u32, pub code_page: u32,
+}
+
+pub struct ResourceParser;
+
+impl ResourceParser {
+    pub fn parse(data: &[u8], sections: &[ImageSectionHeader], rva: u32, size: u32) -> Vec<PeResource> {
+        let mut resources = Vec::new();
+        let offset = match PeParser::rva_to_offset(sections, rva) { Some(o) => o, None => return resources };
+        if data.len() < offset + size as usize { return resources; }
+        Self::parse_directory(data, sections, offset, offset, 0, 0, 0, &mut resources);
+        resources
+    }
+    fn parse_directory(data: &[u8], sections: &[ImageSectionHeader], base: usize, dir_offset: usize, type_id: u32, name_id: u32, lang_id: u32, out: &mut Vec<PeResource>) {
+        if data.len() < dir_offset + 16 { return; }
+        let dir = match ImageResourceDirectory::parse(&data[dir_offset..]) { Some(d) => d, None => return };
+        let entry_count = dir.number_of_named_entries as usize + dir.number_of_id_entries as usize;
+        let entry_offset = dir_offset + 16;
+        for i in 0..entry_count {
+            let off = entry_offset + i * 8;
+            if data.len() < off + 8 { break; }
+            if let Some(entry) = ImageResourceDirectoryEntry::parse(&data[off..]) {
+                let current_id = entry.id;
+                if entry.data_is_directory {
+                    let child_offset = base + entry.data_rva as usize;
+                    if type_id == 0 { Self::parse_directory(data, sections, base, child_offset, current_id, name_id, lang_id, out); }
+                    else if name_id == 0 { Self::parse_directory(data, sections, base, child_offset, type_id, current_id, lang_id, out); }
+                    else { Self::parse_directory(data, sections, base, child_offset, type_id, name_id, current_id, out); }
+                } else {
+                    let data_offset = base + entry.data_rva as usize;
+                    if data.len() >= data_offset + 16 { if let Some(data_entry) = ImageResourceDataEntry::parse(&data[data_offset..]) { out.push(PeResource { type_id, name_id, lang_id, data_rva: data_entry.offset_to_data, size: data_entry.size, code_page: data_entry.code_page }); } }
+                }
+            }
+        }
+    }
+}
+
+// ─── PE TLS Directory Parser ───────────────────────────────────
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageTlsDirectory64 {
+    pub start_address_of_raw_data: u64, pub end_address_of_raw_data: u64,
+    pub address_of_index: u64, pub address_of_callbacks: u64,
+    pub size_of_zero_fill: u32, pub characteristics: u32,
+}
+
+impl Default for ImageTlsDirectory64 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageTlsDirectory64 {
+    pub const fn new() -> Self { Self { start_address_of_raw_data: 0, end_address_of_raw_data: 0, address_of_index: 0, address_of_callbacks: 0, size_of_zero_fill: 0, characteristics: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 40 { return None; }
+        Some(Self { start_address_of_raw_data: u64::from_le_bytes([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]]), end_address_of_raw_data: u64::from_le_bytes([data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]]), address_of_index: u64::from_le_bytes([data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23]]), address_of_callbacks: u64::from_le_bytes([data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31]]), size_of_zero_fill: u32::from_le_bytes([data[32], data[33], data[34], data[35]]), characteristics: u32::from_le_bytes([data[36], data[37], data[38], data[39]]) })
+    }
+}
+
+// ─── PE Debug Directory Parser ─────────────────────────────────
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageDebugDirectory {
+    pub characteristics: u32, pub time_date_stamp: u32, pub major_version: u16,
+    pub minor_version: u16, pub type_: u32, pub size_of_data: u32,
+    pub address_of_raw_data: u32, pub pointer_to_raw_data: u32,
+}
+
+impl Default for ImageDebugDirectory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageDebugDirectory {
+    pub const fn new() -> Self { Self { characteristics: 0, time_date_stamp: 0, major_version: 0, minor_version: 0, type_: 0, size_of_data: 0, address_of_raw_data: 0, pointer_to_raw_data: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 28 { return None; }
+        Some(Self { characteristics: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), time_date_stamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), major_version: u16::from_le_bytes([data[8], data[9]]), minor_version: u16::from_le_bytes([data[10], data[11]]), type_: u32::from_le_bytes([data[12], data[13], data[14], data[15]]), size_of_data: u32::from_le_bytes([data[16], data[17], data[18], data[19]]), address_of_raw_data: u32::from_le_bytes([data[20], data[21], data[22], data[23]]), pointer_to_raw_data: u32::from_le_bytes([data[24], data[25], data[26], data[27]]) })
+    }
+    pub fn type_name(&self) -> &'static str {
+        match self.type_ {
+            1 => "COFF", 2 => "CODEVIEW", 3 => "FPO", 4 => "MISC", 5 => "EXCEPTION",
+            6 => "FIXUP", 7 => "OMAP_TO_SRC", 8 => "OMAP_FROM_SRC", 9 => "BORLAND", 10 => "RESERVED10",
+            11 => "CLSID", 12 => "VC_FEATURE", 13 => "POGO", 14 => "ILTCG", 15 => "MPX",
+            16 => "REPRO", 20 => "EX_DLLCHARACTERISTICS", _ => "UNKNOWN",
+        }
+    }
+}
+
+// ─── PE Loader (In-Memory Mapping) ─────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct MappedImage {
+    pub base_address: u64, pub image_size: u64,
+    pub sections: Vec<(String, u64, u64, u32)>,
+    pub imports_resolved: Vec<(String, String, u64)>,
+    pub relocs_applied: u32,
+    pub memory: Vec<u8>,
+}
+
+impl MappedImage {
+    pub fn new(base: u64, size: u64) -> Self { Self { base_address: base, image_size: size, sections: Vec::new(), imports_resolved: Vec::new(), relocs_applied: 0, memory: vec![0u8; size as usize] } }
+    pub fn read_u64(&self, addr: u64) -> u64 {
+        let off = (addr - self.base_address) as usize;
+        if off + 8 <= self.memory.len() { u64::from_le_bytes([self.memory[off], self.memory[off+1], self.memory[off+2], self.memory[off+3], self.memory[off+4], self.memory[off+5], self.memory[off+6], self.memory[off+7]]) } else { 0 }
+    }
+    pub fn write_u64(&mut self, addr: u64, val: u64) {
+        let off = (addr - self.base_address) as usize;
+        if off + 8 <= self.memory.len() { let b = val.to_le_bytes(); self.memory[off..off+8].copy_from_slice(&b); }
+    }
+    pub fn write_u32(&mut self, addr: u64, val: u32) {
+        let off = (addr - self.base_address) as usize;
+        if off + 4 <= self.memory.len() { let b = val.to_le_bytes(); self.memory[off..off+4].copy_from_slice(&b); }
+    }
+    pub fn write_u16(&mut self, addr: u64, val: u16) {
+        let off = (addr - self.base_address) as usize;
+        if off + 2 <= self.memory.len() { let b = val.to_le_bytes(); self.memory[off..off+2].copy_from_slice(&b); }
+    }
+    pub fn get_entry_point(&self, rva: u32) -> u64 { self.base_address + rva as u64 }
+    pub fn write_bytes(&mut self, addr: u64, data: &[u8]) -> usize {
+        let off = (addr.saturating_sub(self.base_address)) as usize;
+        let len = data.len().min(self.memory.len().saturating_sub(off));
+        self.memory[off..off+len].copy_from_slice(&data[..len]);
+        len
+    }
+    pub fn read_bytes(&self, addr: u64, out: &mut [u8]) -> usize {
+        let off = (addr.saturating_sub(self.base_address)) as usize;
+        let len = out.len().min(self.memory.len().saturating_sub(off));
+        out[..len].copy_from_slice(&self.memory[off..off+len]);
+        len
+    }
+}
+
+pub struct PeLoader;
+
+impl PeLoader {
+    pub fn map_image(data: &[u8], pe: &PeParserResult, base: u64) -> MappedImage {
+        let mut mapped = MappedImage::new(base, pe.optional_header.size_of_image as u64);
+        for sec in &pe.sections {
+            let name = String::from(sec.name_as_str());
+            let va = base + sec.virtual_address as u64;
+            let size = sec.virtual_size as u64;
+            let prot = if sec.is_executable() { 0x40 } else if sec.is_writable() { 0x04 } else { 0x02 };
+            mapped.sections.push((name.clone(), va, size, prot));
+            let raw_off = sec.pointer_to_raw_data as usize;
+            let raw_size = sec.size_of_raw_data as usize;
+            let mem_off = sec.virtual_address as usize;
+            if raw_off + raw_size <= data.len() && mem_off + raw_size <= mapped.memory.len() {
+                mapped.memory[mem_off..mem_off + raw_size].copy_from_slice(&data[raw_off..raw_off + raw_size]);
+            }
+        }
+        let msg = format!("{}: {} sections @ base=0x{:016X}", Lang::get(MsgId::CompatWin32PeLoaded), mapped.sections.len(), base);
+        console_writeln(&msg); mapped
+    }
+    pub fn apply_relocations(mapped: &mut MappedImage, pe: &PeParserResult, new_base: u64) {
+        let old_base = pe.optional_header.image_base;
+        if old_base == new_base { return; }
+        let delta = new_base.wrapping_sub(old_base) as i64;
+        for reloc in &pe.relocs {
+            let page_rva = reloc.virtual_address as u64;
+            for type_offset in &reloc.type_offsets {
+                let type_ = type_offset >> 12;
+                let offset = (type_offset & 0xFFF) as u64;
+                let addr = mapped.base_address + page_rva + offset;
+                match type_ {
+                    3 => { // IMAGE_REL_BASED_HIGHLOW
+                        let old = mapped.read_u64(addr) as u32;
+                        let new = (old as i64 + delta) as u32;
+                        mapped.write_u32(addr, new); mapped.relocs_applied += 1;
+                    }
+                    10 => { // IMAGE_REL_BASED_DIR64
+                        let old = mapped.read_u64(addr);
+                        let new = (old as i64 + delta) as u64;
+                        mapped.write_u64(addr, new); mapped.relocs_applied += 1;
+                    }
+                    1 => { // HIGH
+                        let old = mapped.read_u64(addr) as u32;
+                        let new = ((old as i64 + delta) >> 16) as u16 as u32;
+                        mapped.write_u32(addr, (old & 0xFFFF) | (new << 16)); mapped.relocs_applied += 1;
+                    }
+                    2 => { // LOW
+                        let old = mapped.read_u64(addr) as u32;
+                        let new = ((old as i64 + delta) & 0xFFFF) as u16 as u32;
+                        mapped.write_u32(addr, (old & 0xFFFF0000) | new); mapped.relocs_applied += 1;
+                    }
+                    0 => {},
+                    _ => {}
+                }
+            }
+        }
+        let msg = format!("{}: {} (delta=0x{:016X})", Lang::get(MsgId::CompatWin32PeReloc), mapped.relocs_applied, delta);
+        console_writeln(&msg);
+    }
+    pub fn resolve_imports(mapped: &mut MappedImage, pe: &PeParserResult) {
+        for imp in &pe.imports {
+            let addr = 0x7FFF_0000_0000 + mapped.imports_resolved.len() as u64;
+            mapped.imports_resolved.push((String::from(&imp.dll_name), String::from(&imp.func_name), addr));
+        }
+        let msg = format!("{}: {}", Lang::get(MsgId::CompatWin32PeImports), mapped.imports_resolved.len());
+        console_writeln(&msg);
+    }
+    pub fn resolve_import_address(mapped: &MappedImage, dll: &str, func: &str) -> Option<u64> {
+        mapped.imports_resolved.iter().find(|(d, f, _)| d == dll && f == func).map(|(_, _, addr)| *addr)
+    }
+    pub fn get_proc_address(mapped: &MappedImage, export_rva: u32) -> u64 {
+        mapped.base_address + export_rva as u64
+    }
+}
+
+// ─── Process Memory Manager ────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct MemoryRegion {
+    pub base: u64, pub size: u64, pub prot: u32, pub committed: bool, pub reserved: bool,
+}
+
+pub struct ProcessMemoryManager {
+    pub regions: Vec<MemoryRegion>, pub next_alloc: u64,
+}
+
+impl Default for ProcessMemoryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProcessMemoryManager {
+    pub fn new() -> Self { Self { regions: Vec::new(), next_alloc: 0x1000_0000 } }
+    pub fn allocate(&mut self, size: u64, prot: u32) -> u64 {
+        let addr = self.next_alloc;
+        self.next_alloc += size;
+        self.regions.push(MemoryRegion { base: addr, size, prot, committed: true, reserved: true });
+        let msg = format!("{}: 0x{:016X} (size=0x{:08X}, prot=0x{:08X})", Lang::get(MsgId::CompatWin32VMemAlloc), addr, size, prot);
+        console_writeln(&msg); addr
+    }
+    pub fn free(&mut self, base: u64) -> bool {
+        if let Some(idx) = self.regions.iter().position(|r| r.base == base) {
+            self.regions.remove(idx);
+            let msg = format!("{}: 0x{:016X}", Lang::get(MsgId::CompatWin32VMemFree), base);
+            console_writeln(&msg); true
+        } else { false }
+    }
+    pub fn protect(&mut self, base: u64, new_prot: u32) -> bool {
+        if let Some(r) = self.regions.iter_mut().find(|r| r.base == base) { r.prot = new_prot; true } else { false }
+    }
+    pub fn query(&self, base: u64) -> Option<&MemoryRegion> { self.regions.iter().find(|r| r.base == base) }
+}
+pub struct DelayImportDescriptor {
+    pub attributes: u32, pub name: u32, pub module_handle: u32, pub delay_iat: u32, pub delay_int: u32, pub bound_delay_iat: u32, pub unload_delay_iat: u32, pub time_stamp: u32,
+}
+
+impl Default for DelayImportDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DelayImportDescriptor {
+    pub const fn new() -> Self { Self { attributes: 0, name: 0, module_handle: 0, delay_iat: 0, delay_int: 0, bound_delay_iat: 0, unload_delay_iat: 0, time_stamp: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 32 { return None; }
+        Some(Self { attributes: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), name: u32::from_le_bytes([data[4], data[5], data[6], data[7]]), module_handle: u32::from_le_bytes([data[8], data[9], data[10], data[11]]), delay_iat: u32::from_le_bytes([data[12], data[13], data[14], data[15]]), delay_int: u32::from_le_bytes([data[16], data[17], data[18], data[19]]), bound_delay_iat: u32::from_le_bytes([data[20], data[21], data[22], data[23]]), unload_delay_iat: u32::from_le_bytes([data[24], data[25], data[26], data[27]]), time_stamp: u32::from_le_bytes([data[28], data[29], data[30], data[31]]) })
+    }
+}
+
+pub struct DelayImportDirectoryParser;
+
+impl DelayImportDirectoryParser {
+    pub fn parse(data: &[u8], offset: u32, size: u32) -> Vec<DelayImportDescriptor> {
+        let mut entries = Vec::new();
+        if data.len() < (offset + size) as usize { return entries; }
+        let mut off = offset as usize;
+        let end = (offset + size) as usize;
+        while off + 32 <= end {
+            if let Some(entry) = DelayImportDescriptor::parse(&data[off..]) {
+                if entry.name == 0 && entry.attributes == 0 { break; }
+                entries.push(entry);
+            }
+            off += 32;
+        }
+        entries
+    }
+}
+
+// ─── PE Bound Import Directory Parser ──────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct BoundImportDescriptor {
+    pub time_stamp: u32, pub offset_module_name: u16, pub number_of_module_forwarder_refs: u16,
+}
+
+impl Default for BoundImportDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BoundImportDescriptor {
+    pub const fn new() -> Self { Self { time_stamp: 0, offset_module_name: 0, number_of_module_forwarder_refs: 0 } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 8 { return None; }
+        Some(Self { time_stamp: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), offset_module_name: u16::from_le_bytes([data[4], data[5]]), number_of_module_forwarder_refs: u16::from_le_bytes([data[6], data[7]]) })
+    }
+}
+
+pub struct BoundImportDirectoryParser;
+
+impl BoundImportDirectoryParser {
+    pub fn parse(data: &[u8], offset: u32, size: u32) -> Vec<BoundImportDescriptor> {
+        let mut entries = Vec::new();
+        if data.len() < (offset + size) as usize { return entries; }
+        let mut off = offset as usize;
+        let end = (offset + size) as usize;
+        while off + 8 <= end {
+            if let Some(entry) = BoundImportDescriptor::parse(&data[off..]) {
+                if entry.time_stamp == 0 && entry.offset_module_name == 0 { break; }
+                entries.push(entry);
+            }
+            off += 8;
+        }
+        entries
+    }
+}
+
+// ─── PE .NET Metadata (CLI Header) Parser ──────────────────────
+
+#[derive(Debug, Clone, Copy)]
+pub struct CliHeader {
+    pub cb: u32, pub major_runtime_version: u16, pub minor_runtime_version: u16,
+    pub metadata: ImageDataDirectory, pub flags: u32, pub entry_point_token: u32,
+    pub resources: ImageDataDirectory, pub strong_name_signature: ImageDataDirectory,
+    pub code_manager_table: ImageDataDirectory, pub vtable_fixups: ImageDataDirectory,
+    pub export_address_table_jumps: ImageDataDirectory, pub managed_native_header: ImageDataDirectory,
+}
+
+impl Default for CliHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CliHeader {
+    pub const fn new() -> Self { Self { cb: 0, major_runtime_version: 0, minor_runtime_version: 0, metadata: ImageDataDirectory { virtual_address: 0, size: 0 }, flags: 0, entry_point_token: 0, resources: ImageDataDirectory { virtual_address: 0, size: 0 }, strong_name_signature: ImageDataDirectory { virtual_address: 0, size: 0 }, code_manager_table: ImageDataDirectory { virtual_address: 0, size: 0 }, vtable_fixups: ImageDataDirectory { virtual_address: 0, size: 0 }, export_address_table_jumps: ImageDataDirectory { virtual_address: 0, size: 0 }, managed_native_header: ImageDataDirectory { virtual_address: 0, size: 0 } } }
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < 72 { return None; }
+        Some(Self { cb: u32::from_le_bytes([data[0], data[1], data[2], data[3]]), major_runtime_version: u16::from_le_bytes([data[4], data[5]]), minor_runtime_version: u16::from_le_bytes([data[6], data[7]]), metadata: Self::parse_dir(data, 8), flags: u32::from_le_bytes([data[16], data[17], data[18], data[19]]), entry_point_token: u32::from_le_bytes([data[20], data[21], data[22], data[23]]), resources: Self::parse_dir(data, 24), strong_name_signature: Self::parse_dir(data, 32), code_manager_table: Self::parse_dir(data, 40), vtable_fixups: Self::parse_dir(data, 48), export_address_table_jumps: Self::parse_dir(data, 56), managed_native_header: Self::parse_dir(data, 64) })
+    }
+    fn parse_dir(data: &[u8], off: usize) -> ImageDataDirectory {
+        if data.len() < off + 8 { return ImageDataDirectory { virtual_address: 0, size: 0 }; }
+        ImageDataDirectory { virtual_address: u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]), size: u32::from_le_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]) }
+    }
+}
