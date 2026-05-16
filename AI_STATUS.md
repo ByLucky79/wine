@@ -4992,3 +4992,147 @@ Geçmişten günümüze ve geleceğe: tüm 11 mimari boot → kernel_main → ma
 - KURAL 28 (header doğrulama): Tüm header'lar doğrulandı ✅
 - KURAL 30 (dosya isimlendirme): mod.rs/lib.rs/main.rs kullanılmadı ✅
 - Clean room: Yalnızca MSDN public spec kullanıldı ✅
+
+---
+
+## 2026-05-16 — winmm-core Crate Oluşturuldu: ~173 Fonksiyon, 9 Dosya (Oturum 82)
+
+### Özet
+`winmm-core` crate'i oluşturuldu (winmm.dll clean-room Rust port).
+Windows Multimedia API'sinin tüm fonksiyonları 9 kaynak dosyaya işleve göre
+ayrılarak stub implementasyonlarla sunuldu. `no_std` uyumlu, 0 hata 0 uyarı.
+
+### Yapılan Değişiklikler
+
+#### 1. Crate Yapısı
+- `compat/win32/dlls/rust/winmm_core/` dizini oluşturuldu
+- `Cargo.toml`: name = "winmm-core", lib name = "winmm_core", path = "winmm_root.rs"
+- `winmm_root.rs`: `#![no_std]`, `extern crate alloc;`, tüm Win32 MM tipleri,
+  sabitler (MMSYSERR_*, WAVERR_*, MIDIERR_*, MIXERR_*, TIMERR_*, MMIOERR_*),
+  ortak yapılar (WAVEFORMATEX, WAVEHDR, MIDIHDR, MMTIME, TIMECAPS, MMIOINFO,
+  MMCKINFO, WAVEOUTCAPSA/W, WAVEINCAPSA/W, MIDIOUTCAPSA/W, MIDIINCAPSA/W,
+  AUXCAPSA/W, JOYCAPSA/W, JOYINFO, JOYINFOEX, MIXERCAPSA/W, MIXERLINEA/W,
+  MIXERCONTROLDETAILS, MIXERLINECONTROLSA/W), 9 modül bildirimi `#[path]` ile
+
+#### 2. 9 Kaynak Dosyası
+
+| Dosya | Fonksiyon Sayısı | Açıklama |
+|-------|------------------|----------|
+| `src/mm_driver.rs` | 14 | CloseDriver, OpenDriver(A), DefDriverProc, DriverCallback, GetDriverFlags, GetDriverModuleHandle, SendDriverMessage + Drv* takma adları |
+| `src/mm_sound.rs` | 5 | PlaySoundA/W, PlaySound, sndPlaySoundA/W |
+| `src/mm_joystick.rs` | 10 | joyConfigChanged, joyGetDevCapsA/W, joyGetNumDevs, joyGetPos, joyGetPosEx, joyGetThreshold, joyReleaseCapture, joySetCapture, joySetThreshold |
+| `src/mm_mci.rs` | 20 | mciSendCommandA/W, mciSendStringA/W, mciGetDeviceIDA/W, mciGetDeviceIDFromElementIDA/W, mciGetErrorStringA/W, mciGetCreatorTask, mciGetYieldProc, mciGetDriverData, mciSetDriverData, mciSetYieldProc, mciDriverNotify, mciDriverYield, mciExecute, mciFreeCommandResource, mciLoadCommandResource |
+| `src/mm_midi.rs` | 43 | midiConnect, midiDisconnect; midiIn* (11); midiOut* (16 + CacheDrumPatches/CachePatches); midiStream* (8) |
+| `src/mm_mixer.rs` | 14 | mixerClose, mixerGetControlDetailsA/W, mixerGetDevCapsA/W, mixerGetID, mixerGetLineControlsA/W, mixerGetLineInfoA/W, mixerGetNumDevs, mixerMessage, mixerOpen, mixerSetControlDetails |
+| `src/mm_mmio.rs` | 27 | mmGetCurrentTask, mmTaskBlock/Create/Signal/Yield; mmioAdvance/Ascend/Close/CreateChunk/Descend/Flush/GetInfo/InstallIOProcA/W/OpenA/W/Read/RenameA/W/Seek/SendMessage/SetBuffer/SetInfo/StringToFOURCCA/W/Write; mmsystemGetVersion |
+| `src/mm_wave.rs` | 39 | waveInAddBuffer/Close/GetDevCapsA/W/GetErrorTextA/W/GetID/GetNumDevs/GetPosition/Message/Open/PrepareHeader/Reset/Start/Stop/UnprepareHeader; waveOutBreakLoop/Close/GetDevCapsA/W/GetErrorTextA/W/GetID/GetNumDevs/GetPitch/GetPlaybackRate/GetPosition/GetVolume/Message/Open/Pause/PrepareHeader/Reset/Restart/SetPitch/SetPlaybackRate/SetVolume/UnprepareHeader/Write; auxGetDevCapsA/W/GetNumDevs/GetVolume/OutMessage/SetVolume |
+| `src/mm_timer.rs` | 7 | timeBeginPeriod, timeEndPeriod, timeGetDevCaps, timeGetSystemTime, timeGetTime, timeKillEvent, timeSetEvent |
+| **Toplam** | **~173** | |
+
+#### 3. Teknik Özellikler
+- Tüm Win32 API bayrak sabitleri `pub const` olarak tanımlandı (MSDN public spec)
+- MIDI patch önbelleği için `WORD_ARRAY = [WORD; 128]` yardımcı tipi
+- Timer modülünde `AtomicSatSub` trait extension (doygun çıkarma)
+- Ses/MIDI/timer'da uygun stub dönüş değerleri (NODRIVER, BADDEVICEID, INVALHANDLE)
+- MCI, MMIO, MM task fonksiyonları tam özellik setini kapsar
+
+### Derleme Durumu
+- **`cargo check -p winmm-core` → ✅ 0 hata, 0 uyarı**
+
+### Kural Uyumu
+- KURAL 1 (header): Her dosyada tam ÖZKAN-OS header bloku ✅
+- KURAL 2 (no_std): Yalnızca winmm_root.rs'de `#![no_std]` ✅
+- KURAL 22 (0 hata/uyarı): ✅ 0 hata, 0 uyarı
+- KURAL 30 (dosya isimlendirme): mod.rs/lib.rs/main.rs kullanılmadı ✅
+- Patent/telif ihlali yok: MSDN public spec + Wine fonksiyon listesi referans ✅
+- Clean room: Sıfır Wine kod kopyası ✅
+
+---
+
+## 2026-05-16 — user32-core Crate Oluşturuldu: ~432 Fonksiyon, 14 Dosya (Oturum 83)
+
+### Özet
+
+`user32-core` crate'i oluşturuldu (user32.dll clean-room Rust port).
+Windows pencere sistemi, mesaj kuyruğu, diyalog, giriş, kaynak, pano, menü,
+sistem parametreleri, hook ve monitör API'lerini kapsar.
+
+### Yapılan Değişiklikler
+
+- `compat/win32/dlls/rust/user32_core/` dizini oluşturuldu
+- `Cargo.toml`: name = "user32-core", lib name = "user32_core", path = "user32_root.rs"
+- `user32_root.rs`: `#![no_std]`, tüm Win32 USER32 tipleri, sabitler, WM_* mesajlar,
+  SM_* metrikler, WNDCLASSA/W/EXAW, MSG, PAINTSTRUCT, SCROLLINFO, INPUT vb.
+- `src/wnd_class.rs` — 22 fn: RegisterClass/Ex, UnregisterClass, GetClassInfo/Ex,
+  GetClassLong/Ptr, SetClassLong/Ptr, GetClassName, GetClassWord, SetClassWord
+- `src/wnd_create.rs` — 68 fn: CreateWindowEx, DestroyWindow, ShowWindow, MoveWindow,
+  SetWindowPos, GetWindowRect, GetClientRect, IsWindow/Enabled/Visible, FindWindow,
+  EnumWindows, GetTopWindow, GetWindow, GetDesktopWindow, GetForegroundWindow,
+  GetWindowLong/Ptr, SetWindowLong/Ptr, AdjustWindowRect, ScreenToClient, ClientToScreen,
+  GetWindowText, SetWindowText, GetWindowPlacement, SetWindowRgn, BeginDeferWindowPos
+- `src/wnd_message.rs` — 42 fn: GetMessage/Peek, TranslateMessage, DispatchMessage,
+  SendMessage/Timeout/Notify/Callback, PostMessage, PostQuitMessage, BroadcastSystemMessage,
+  InSendMessage, ReplyMessage, WaitMessage, GetMessagePos/Time/ExtraInfo,
+  RegisterWindowMessage, DefWindowProc, CallWindowProc, SetTimer, KillTimer,
+  WaitForInputIdle, TranslateAccelerator
+- `src/wnd_paint.rs` — 46 fn: BeginPaint, EndPaint, InvalidateRect/Rgn, ValidateRect/Rgn,
+  UpdateWindow, RedrawWindow, GetUpdateRect/Rgn, GetDC/Ex/Window, ReleaseDC, DrawText/Ex,
+  FillRect, FrameRect, InvertRect, DrawFocusRect, DrawEdge, DrawFrameControl, DrawCaption,
+  DrawState, GrayString, LockWindowUpdate, DrawIcon/Ex, TabbedTextOut, ScrollWindow/Ex,
+  GetScrollInfo/Pos/Range, SetScrollInfo/Pos/Range, ShowScrollBar
+- `src/wnd_prop.rs` — 27 fn: GetProp/Set/Remove, EnumProps/Ex, GetWindowThreadProcessId,
+  GetGUIThreadInfo, GetWindowInfo, GetTitleBarInfo, GetMenuBarInfo, GetComboBoxInfo,
+  GetScrollBarInfo, GetCursorInfo, FlashWindow/Ex, SetLayeredWindowAttributes,
+  UpdateLayeredWindow, GetWindowRgnBox
+- `src/dialog.rs` — 35 fn: CreateDialog/Param, DialogBox/Param, EndDialog, GetDlgItem,
+  GetDlgItemInt/Text, SetDlgItemInt/Text, SendDlgItemMessage, GetNextDlgGroup/TabItem,
+  IsDlgButtonChecked, CheckDlgButton, CheckRadioButton, MessageBox/Ex/Indirect,
+  GetDialogBaseUnits, MapDialogRect, IsDialogMessage, DefDlgProc
+- `src/input_kbd.rs` — 32 fn: GetKeyState, GetAsyncKeyState, GetKeyboardState,
+  VkKeyScan/Ex, MapVirtualKey/Ex, GetKeyNameText, GetKBCodePage,
+  GetKeyboardLayout/List/Name, LoadKeyboardLayout, UnloadKeyboardLayout,
+  ActivateKeyboardLayout, ToAscii/Ex, ToUnicode/Ex, RegisterHotKey, UnregisterHotKey,
+  BlockInput, keybd_event, SendInput
+- `src/input_mouse.rs` — 25 fn: GetCursorPos, SetCursorPos, GetCapture, SetCapture,
+  ReleaseCapture, ClipCursor, GetClipCursor, ShowCursor, GetCursor, SetCursor,
+  LoadCursor/FromFile, CreateCursor, DestroyCursor, CopyCursor, SetSystemCursor,
+  TrackMouseEvent, mouse_event, GetMouseMovePointsEx, GetDoubleClickTime, DragDetect,
+  SwapMouseButton
+- `src/resources.rs` — 31 fn: LoadIcon, CreateIcon, DestroyIcon, CopyIcon,
+  LookupIconIdFromDirectory/Ex, CreateIconFromResource/Ex, CreateIconIndirect,
+  GetIconInfo/Ex, LoadBitmap, LoadMenu/Indirect, LoadAccelerators, LoadString,
+  LoadImage, CopyImage, DestroyAcceleratorTable, CopyAcceleratorTable,
+  CreateAcceleratorTable
+- `src/clipboard.rs` — 21 fn: OpenClipboard, CloseClipboard, EmptyClipboard,
+  SetClipboardData, GetClipboardData, IsClipboardFormatAvailable,
+  GetPriorityClipboardFormat, CountClipboardFormats, EnumClipboardFormats,
+  RegisterClipboardFormat, GetClipboardFormatName, GetClipboardOwner,
+  GetClipboardViewer, SetClipboardViewer, ChangeClipboardChain,
+  GetOpenClipboardWindow, AddClipboardFormatListener, RemoveClipboardFormatListener,
+  GetUpdatedClipboardFormats
+- `src/menu.rs` — 39 fn: CreateMenu, CreatePopupMenu, DestroyMenu, AppendMenu,
+  InsertMenu/Item, ModifyMenu, DeleteMenu, RemoveMenu, EnableMenuItem, CheckMenuItem,
+  GetMenuItemInfo/String/ID/Count/State, SetMenuItemInfo, GetSubMenu, GetSystemMenu,
+  SetMenu, GetMenu, DrawMenuBar, HiliteMenuItem, TrackPopupMenu/Ex, GetMenuDefaultItem,
+  SetMenuDefaultItem, GetMenuInfo, SetMenuInfo, CheckMenuRadioItem, MenuItemFromPoint
+- `src/system_param.rs` — 18 fn: GetSystemMetrics, GetSystemMetricsForDpi,
+  SystemParametersInfo, SystemParametersInfoForDpi, GetSysColor, GetSysColorBrush,
+  SetSysColors, ArrangeIconicWindows, ExitWindowsEx, LockWorkStation,
+  ShutdownBlockReasonCreate/Destroy/Query, GetDpiForSystem, GetDpiForWindow,
+  GetThreadDpiAwarenessContext, SetThreadDpiAwarenessContext
+- `src/hook.rs` — 9 fn: SetWindowsHook, SetWindowsHookEx, UnhookWindowsHook,
+  UnhookWindowsHookEx, CallNextHookEx, CallMsgFilter
+- `src/monitor.rs` — 17 fn: MonitorFromWindow/Point/Rect, GetMonitorInfo,
+  EnumDisplayMonitors, EnumDisplayDevices, EnumDisplaySettings/Ex,
+  ChangeDisplaySettings/Ex, GetDisplayConfigBufferSizes
+
+### Derleme Durumu
+- **`cargo check -p user32-core` → ✅ 0 hata, 0 uyarı**
+
+### Kural Uyumu
+- KURAL 1 (header): Her dosyada tam ÖZKAN-OS header bloku ✅
+- KURAL 2 (no_std): Yalnızca user32_root.rs'de `#![no_std]` ✅
+- KURAL 22 (0 hata/uyarı): ✅ 0 hata, 0 uyarı
+- KURAL 30 (dosya isimlendirme): mod.rs/lib.rs/main.rs kullanılmadı ✅
+- Patent/telif ihlali yok: MSDN public spec fonksiyon listesi referans ✅
+- Clean room: Sıfır Wine kod kopyası ✅

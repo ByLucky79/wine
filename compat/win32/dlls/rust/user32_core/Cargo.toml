@@ -1,0 +1,20 @@
+[package]
+name        = "user32-core"
+version     = "2026.5.0"
+edition     = "2021"
+authors     = ["Özkan Yıldırım"]
+description = "ÖZKAN-OS — user32.dll clean-room Rust stub (Win32 window system)"
+license     = "GPL-3.0-only"
+
+[lib]
+name = "user32_core"
+path = "user32_root.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
