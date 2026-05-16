@@ -1,0 +1,11 @@
+[package]
+name = "winmm-core"
+version = "2026.5.0"
+edition = "2021"
+description = "OZKAN-OS Win32 winmm.dll clean-room Rust port (Windows Multimedia API)"
+
+[lib]
+name = "winmm_core"
+path = "winmm_root.rs"
+
+[dependencies]

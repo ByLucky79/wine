@@ -4992,3 +4992,57 @@ Geçmişten günümüze ve geleceğe: tüm 11 mimari boot → kernel_main → ma
 - KURAL 28 (header doğrulama): Tüm header'lar doğrulandı ✅
 - KURAL 30 (dosya isimlendirme): mod.rs/lib.rs/main.rs kullanılmadı ✅
 - Clean room: Yalnızca MSDN public spec kullanıldı ✅
+
+---
+
+## 2026-05-16 — winmm-core Crate Oluşturuldu: ~173 Fonksiyon, 9 Dosya (Oturum 82)
+
+### Özet
+`winmm-core` crate'i oluşturuldu (winmm.dll clean-room Rust port).
+Windows Multimedia API'sinin tüm fonksiyonları 9 kaynak dosyaya işleve göre
+ayrılarak stub implementasyonlarla sunuldu. `no_std` uyumlu, 0 hata 0 uyarı.
+
+### Yapılan Değişiklikler
+
+#### 1. Crate Yapısı
+- `compat/win32/dlls/rust/winmm_core/` dizini oluşturuldu
+- `Cargo.toml`: name = "winmm-core", lib name = "winmm_core", path = "winmm_root.rs"
+- `winmm_root.rs`: `#![no_std]`, `extern crate alloc;`, tüm Win32 MM tipleri,
+  sabitler (MMSYSERR_*, WAVERR_*, MIDIERR_*, MIXERR_*, TIMERR_*, MMIOERR_*),
+  ortak yapılar (WAVEFORMATEX, WAVEHDR, MIDIHDR, MMTIME, TIMECAPS, MMIOINFO,
+  MMCKINFO, WAVEOUTCAPSA/W, WAVEINCAPSA/W, MIDIOUTCAPSA/W, MIDIINCAPSA/W,
+  AUXCAPSA/W, JOYCAPSA/W, JOYINFO, JOYINFOEX, MIXERCAPSA/W, MIXERLINEA/W,
+  MIXERCONTROLDETAILS, MIXERLINECONTROLSA/W), 9 modül bildirimi `#[path]` ile
+
+#### 2. 9 Kaynak Dosyası
+
+| Dosya | Fonksiyon Sayısı | Açıklama |
+|-------|------------------|----------|
+| `src/mm_driver.rs` | 14 | CloseDriver, OpenDriver(A), DefDriverProc, DriverCallback, GetDriverFlags, GetDriverModuleHandle, SendDriverMessage + Drv* takma adları |
+| `src/mm_sound.rs` | 5 | PlaySoundA/W, PlaySound, sndPlaySoundA/W |
+| `src/mm_joystick.rs` | 10 | joyConfigChanged, joyGetDevCapsA/W, joyGetNumDevs, joyGetPos, joyGetPosEx, joyGetThreshold, joyReleaseCapture, joySetCapture, joySetThreshold |
+| `src/mm_mci.rs` | 20 | mciSendCommandA/W, mciSendStringA/W, mciGetDeviceIDA/W, mciGetDeviceIDFromElementIDA/W, mciGetErrorStringA/W, mciGetCreatorTask, mciGetYieldProc, mciGetDriverData, mciSetDriverData, mciSetYieldProc, mciDriverNotify, mciDriverYield, mciExecute, mciFreeCommandResource, mciLoadCommandResource |
+| `src/mm_midi.rs` | 43 | midiConnect, midiDisconnect; midiIn* (11); midiOut* (16 + CacheDrumPatches/CachePatches); midiStream* (8) |
+| `src/mm_mixer.rs` | 14 | mixerClose, mixerGetControlDetailsA/W, mixerGetDevCapsA/W, mixerGetID, mixerGetLineControlsA/W, mixerGetLineInfoA/W, mixerGetNumDevs, mixerMessage, mixerOpen, mixerSetControlDetails |
+| `src/mm_mmio.rs` | 27 | mmGetCurrentTask, mmTaskBlock/Create/Signal/Yield; mmioAdvance/Ascend/Close/CreateChunk/Descend/Flush/GetInfo/InstallIOProcA/W/OpenA/W/Read/RenameA/W/Seek/SendMessage/SetBuffer/SetInfo/StringToFOURCCA/W/Write; mmsystemGetVersion |
+| `src/mm_wave.rs` | 39 | waveInAddBuffer/Close/GetDevCapsA/W/GetErrorTextA/W/GetID/GetNumDevs/GetPosition/Message/Open/PrepareHeader/Reset/Start/Stop/UnprepareHeader; waveOutBreakLoop/Close/GetDevCapsA/W/GetErrorTextA/W/GetID/GetNumDevs/GetPitch/GetPlaybackRate/GetPosition/GetVolume/Message/Open/Pause/PrepareHeader/Reset/Restart/SetPitch/SetPlaybackRate/SetVolume/UnprepareHeader/Write; auxGetDevCapsA/W/GetNumDevs/GetVolume/OutMessage/SetVolume |
+| `src/mm_timer.rs` | 7 | timeBeginPeriod, timeEndPeriod, timeGetDevCaps, timeGetSystemTime, timeGetTime, timeKillEvent, timeSetEvent |
+| **Toplam** | **~173** | |
+
+#### 3. Teknik Özellikler
+- Tüm Win32 API bayrak sabitleri `pub const` olarak tanımlandı (MSDN public spec)
+- MIDI patch önbelleği için `WORD_ARRAY = [WORD; 128]` yardımcı tipi
+- Timer modülünde `AtomicSatSub` trait extension (doygun çıkarma)
+- Ses/MIDI/timer'da uygun stub dönüş değerleri (NODRIVER, BADDEVICEID, INVALHANDLE)
+- MCI, MMIO, MM task fonksiyonları tam özellik setini kapsar
+
+### Derleme Durumu
+- **`cargo check -p winmm-core` → ✅ 0 hata, 0 uyarı**
+
+### Kural Uyumu
+- KURAL 1 (header): Her dosyada tam ÖZKAN-OS header bloku ✅
+- KURAL 2 (no_std): Yalnızca winmm_root.rs'de `#![no_std]` ✅
+- KURAL 22 (0 hata/uyarı): ✅ 0 hata, 0 uyarı
+- KURAL 30 (dosya isimlendirme): mod.rs/lib.rs/main.rs kullanılmadı ✅
+- Patent/telif ihlali yok: MSDN public spec + Wine fonksiyon listesi referans ✅
+- Clean room: Sıfır Wine kod kopyası ✅
